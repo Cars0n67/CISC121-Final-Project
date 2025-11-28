@@ -1,12 +1,25 @@
+"""
+Bubble Sort Visualizer
+======================
+
+This module defines a small Gradio application that demonstrates the bubble
+sort algorithm. Users can enter a comma‑separated list of integers and step
+through each iteration of the sorting process. A bar chart illustrates how
+the list changes over time, and the interface exposes a slider that lets
+people move backwards and forwards through the recorded states.
+"""
+
+from __future__ import annotations
+
 import io
 from typing import List, Tuple
 
-import matplotlib.pyplot as plt
-from PIL import Image
-import gradio as gr
+import matplotlib.pyplot as plt  # type: ignore
+from PIL import Image  # type: ignore
+import gradio as gr  # type: ignore
 
 def bubble_sort_steps(arr: List[int]) -> List[List[int]]:
-    """Return a list of array states for each comparison/swapping pass."""
+    """Return a list of array states for each comparison/swapping pass.""" 
     steps: List[List[int]] = []
     steps.append(arr.copy())
     n = len(arr)
@@ -49,12 +62,7 @@ def run_sort(numbers: str) -> Tuple[gr.components.Slider, Image.Image, str, List
     try:
         values = parse_numbers(numbers)
     except Exception as exc:
-        return (
-            gr.update(visible=False),
-            plot_array([]),
-            f"Error: {exc}",
-            [],
-        )
+        return (gr.update(visible=False), plot_array([]), f"Error: {exc}", [])
     steps = bubble_sort_steps(values.copy())
     slider_update = gr.update(visible=True, minimum=0, maximum=len(steps) - 1, value=0, step=1)
     img = plot_array(steps[0])
@@ -86,7 +94,9 @@ def build_demo() -> gr.Blocks:
                 placeholder="e.g., 5, 3, 8, 4, 2, 7, 1",
                 lines=1,
             )
-            run_button = gr.Button(label="Run Bubble Sort", variant="primary")
+            # Use positional argument for the button text; 'label' and 'variant'
+            # aren’t supported on older Gradio versions.
+            run_button = gr.Button("Run Bubble Sort")
         step_slider = gr.Slider(
             minimum=0,
             maximum=0,
@@ -113,3 +123,4 @@ def build_demo() -> gr.Blocks:
 if __name__ == "__main__":
     demo = build_demo()
     demo.launch()
+
