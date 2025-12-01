@@ -2,42 +2,86 @@
 Bubble Sort Visualizer
 ======================
 
-This module defines a small Gradio application that demonstrates the bubble
-sort algorithm. Users can enter a comma‑separated list of integers and step
-through each iteration of the sorting process. A bar chart illustrates how
-the list changes over time, and the interface exposes a slider that lets
-people move backwards and forwards through the recorded states.
+This module defines a Gradio application that teaches bubble sort.  It records
+every comparison and swap, then displays a bar chart with highlighted indices
+and explains each action in plain language.  A slider lets users step through
+the algorithm at their own pace.
 """
 
 from __future__ import annotations
-
 import io
 from typing import List, Tuple
-
 import matplotlib.pyplot as plt  # type: ignore
 from PIL import Image  # type: ignore
 import gradio as gr  # type: ignore
 
-def bubble_sort_steps(arr: List[int]) -> List[List[int]]:
-    """Return a list of array states for each comparison/swapping pass.""" 
-    steps: List[List[int]] = []
-    steps.append(arr.copy())
+def bubble_sort_steps(arr: List[int]) -> List[dict]:
+    """
+    Run bubble sort while capturing a detailed trace of each operation.
+    Each entry in the returned list records the array state, the compared
+    indices, whether a swap occurred, the pass number and a descriptive
+    message.  The first entry represents the initial unsorted array.
+    """
+    steps: List[dict] = []
+    steps.append({
+        "arr": arr.copy(),
+        "highlight": None,
+        "swapped": False,
+        "pass_no": 0,
+        "desc": "Initial array: the algorithm will repeatedly compare adjacent values and swap them if out of order."
+    })
     n = len(arr)
     for i in range(n):
-        swapped = False
+        swapped_in_pass = False
         for j in range(0, n - i - 1):
-            if arr[j] > arr[j + 1]:
-                arr[j], arr[j + 1] = arr[j + 1], arr[j]
+            a, b = arr[j], arr[j + 1]
+            if a > b:
+                arr[j], arr[j + 1] = b, a
                 swapped = True
-            steps.append(arr.copy())
-        if not swapped:
+                swapped_in_pass = True
+                desc = (
+                    f"Pass {i+1}, comparing indices {j} and {j+1}: {a} > {b}, so swap them."
+                    f"\n\nArray becomes {arr}."
+                )
+            else:
+                swapped = False
+                desc = (
+                    f"Pass {i+1}, comparing indices {j} and {j+1}: {a} ≤ {b}, so keep them in place."
+                )
+            steps.append({
+                "arr": arr.copy(),
+                "highlight": (j, j + 1),
+                "swapped": swapped,
+                "pass_no": i + 1,
+                "desc": desc
+            })
+        if not swapped_in_pass:
+            steps.append({
+                "arr": arr.copy(),
+                "highlight": None,
+                "swapped": False,
+                "pass_no": i + 1,
+                "desc": (
+                    f"Pass {i+1} completed with no swaps, so the array is sorted and the algorithm stops early."
+                )
+            })
             break
     return steps
 
-def plot_array(arr: List[int]) -> Image.Image:
-    """Render a simple bar chart for the current state of the list."""
+def plot_array(arr: List[int], highlight: Tuple[int, int] | None = None, swapped: bool = False) -> Image.Image:
+    """
+    Draw a bar chart of the current array state.
+    The compared indices are coloured orange (or red if a swap occurred),
+    while all other bars are blue.
+    """
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(range(len(arr)), arr, color="#4fa3d1")
+    colors: List[str] = []
+    for i, _ in enumerate(arr):
+        if highlight and i in highlight:
+            colors.append("#e74c3c" if swapped else "#f39c12")
+        else:
+            colors.append("#4fa3d1")
+    ax.bar(range(len(arr)), arr, color=colors)
     ax.set_title("Bubble Sort Visualization", fontsize=14)
     ax.set_xlabel("Index")
     ax.set_ylabel("Value")
@@ -57,35 +101,61 @@ def parse_numbers(text: str) -> List[int]:
         raise ValueError("Please enter at least one integer.")
     return [int(part) for part in parts]
 
-def run_sort(numbers: str) -> Tuple[gr.components.Slider, Image.Image, str, List[List[int]]]:
-    """Callback to execute when the user clicks the button."""
+def run_sort(numbers: str):
+    """
+    Parse the user's input, run bubble sort, and set up the initial state.
+    Returns a slider update, the first image, the first explanation,
+    a status message, and the full list of steps.
+    """
     try:
         values = parse_numbers(numbers)
     except Exception as exc:
-        return (gr.update(visible=False), plot_array([]), f"Error: {exc}", [])
+        return (
+            gr.update(visible=False),
+            plot_array([], None, False),
+            "",
+            f"Error: {exc}",
+            [],
+        )
     steps = bubble_sort_steps(values.copy())
     slider_update = gr.update(visible=True, minimum=0, maximum=len(steps) - 1, value=0, step=1)
-    img = plot_array(steps[0])
-    status = f"Total steps: {len(steps)}"
-    return slider_update, img, status, steps
+    first = steps[0]
+    img = plot_array(first["arr"], highlight=first["highlight"], swapped=first["swapped"])
+    description = first["desc"]
+    status = f"Total steps: {len(steps)}" if len(steps) > 1 else "Array is already sorted."
+    return slider_update, img, description, status, steps
 
-def update_plot(step: int, steps: List[List[int]]) -> Image.Image:
-    """Update the bar chart when the slider value changes."""
+def update_plot(step: int, steps: List[dict]):
+    """
+    Update the bar chart, explanation and status when the slider moves.
+    Shows a completion message on the final step.
+    """
     if not steps:
-        return plot_array([])
+        return plot_array([], None, False), "", ""
     idx = max(0, min(int(step), len(steps) - 1))
-    return plot_array(steps[idx])
+    current = steps[idx]
+    img = plot_array(current["arr"], highlight=current["highlight"], swapped=current["swapped"])
+    description = current["desc"]
+    if len(steps) > 1:
+        status = f"Step {idx} of {len(steps) - 1}"
+    else:
+        status = ""
+    if idx == len(steps) - 1:
+        pass_no = current.get("pass_no", 0)
+        status = f"Completed: array sorted after {pass_no} pass{'es' if pass_no != 1 else ''}."
+    return img, description, status
 
 def build_demo() -> gr.Blocks:
-    """Create and return the Gradio interface for the bubble sort visualizer."""
+    """Assemble and return the Gradio interface."""
     with gr.Blocks(title="Bubble Sort Visualizer") as demo:
         gr.Markdown(
             """
             # Bubble Sort Visualizer
 
-            Enter a list of integers separated by commas and click **Run Bubble Sort**
-            to see how the bubble sort algorithm gradually orders the numbers.
-            Use the step slider to move through each comparison and swap.
+            This app demonstrates how the bubble sort algorithm works.  
+            Enter a list of integers separated by commas and click **Run Bubble Sort**.  
+            You can then use the slider to move through each comparison and swap.  
+            The explanation box describes what happens on each step.
             """
         )
         with gr.Row():
@@ -94,8 +164,6 @@ def build_demo() -> gr.Blocks:
                 placeholder="e.g., 5, 3, 8, 4, 2, 7, 1",
                 lines=1,
             )
-            # Use positional argument for the button text; 'label' and 'variant'
-            # aren’t supported on older Gradio versions.
             run_button = gr.Button("Run Bubble Sort")
         step_slider = gr.Slider(
             minimum=0,
@@ -106,21 +174,23 @@ def build_demo() -> gr.Blocks:
             visible=False,
         )
         chart_output = gr.Image(type="pil", label="Visualization")
+        desc_output = gr.Markdown(value="")
         status_label = gr.Textbox(label="Status", interactive=False)
         state = gr.State([])
         run_button.click(
             run_sort,
             inputs=[input_text],
-            outputs=[step_slider, chart_output, status_label, state],
+            outputs=[step_slider, chart_output, desc_output, status_label, state],
         )
         step_slider.change(
             update_plot,
             inputs=[step_slider, state],
-            outputs=chart_output,
+            outputs=[chart_output, desc_output, status_label],
         )
     return demo
 
 if __name__ == "__main__":
     demo = build_demo()
     demo.launch()
+
 
