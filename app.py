@@ -18,7 +18,7 @@ unnecessary complexity.
 from __future__ import annotations
 
 import io
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 import matplotlib.pyplot as plt  # type: ignore
 from PIL import Image  # type: ignore
@@ -178,7 +178,7 @@ def parse_numbers(text: str) -> List[int]:
     return [int(part) for part in parts]
 
 
-def run_sort(numbers: str) -> Tuple[gr.Update, Image.Image, str, str, str, List[dict]]:
+def run_sort(numbers: str) -> Tuple[Any, Image.Image, str, str, str, List[dict]]:
     """Process input, perform bubble sort and initialise interface state.
 
     When the user clicks the **Run Bubble Sort** button, this callback
@@ -271,7 +271,7 @@ def update_plot(step: int, steps: List[dict]) -> Tuple[Image.Image, str, str, st
 
 
 # Additional callbacks for stepping through the algorithm using buttons
-def next_step(current_step: int, steps: List[dict]) -> Tuple[gr.Update, Image.Image, str, str, str]:
+def next_step(current_step: int, steps: List[dict]) -> Tuple[Any, Image.Image, str, str, str]:
     """Advance to the next step when the user clicks the 'Next' button.
 
     Args:
@@ -289,7 +289,7 @@ def next_step(current_step: int, steps: List[dict]) -> Tuple[gr.Update, Image.Im
     return slider_update, img, desc, arr_str, status
 
 
-def prev_step(current_step: int, steps: List[dict]) -> Tuple[gr.Update, Image.Image, str, str, str]:
+def prev_step(current_step: int, steps: List[dict]) -> Tuple[Any, Image.Image, str, str, str]:
     """Return to the previous step when the user clicks the 'Previous' button.
 
     Args:
@@ -390,4 +390,3 @@ if __name__ == "__main__":
     # Set server_name="0.0.0.0" to make the app accessible externally when
     # deploying on platforms like Hugging Face Spaces
     demo.launch()
-
