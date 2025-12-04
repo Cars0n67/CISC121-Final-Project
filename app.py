@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 from typing import List, Tuple, Any
+import random
 
 import matplotlib.pyplot as plt  # type: ignore
 from PIL import Image  # type: ignore
@@ -92,9 +93,17 @@ def bubble_sort_steps(arr: List[int]) -> List[dict]:
                 )
             else:
                 swapped = False
-                desc = (
-                    f"Pass {i+1}, comparing indices {j} and {j+1}: {a} ≤ {b}, so keep them in place."
-                )
+                # If the values are equal, explain that no swap is needed and that
+                # bubble sort preserves the relative order of equal elements (stability).
+                if a == b:
+                    desc = (
+                        f"Pass {i+1}, comparing indices {j} and {j+1}: {a} == {b}, so keep them in place. "
+                        "Because the values are equal, bubble sort leaves them in their original order, demonstrating its stability."
+                    )
+                else:
+                    desc = (
+                        f"Pass {i+1}, comparing indices {j} and {j+1}: {a} ≤ {b}, so keep them in place."
+                    )
             steps.append({
                 "arr": arr.copy(),
                 "highlight": (j, j + 1),
@@ -117,6 +126,65 @@ def bubble_sort_steps(arr: List[int]) -> List[dict]:
                 )
             })
             break
+    return steps
+
+
+# Additional algorithm: Linear Search
+def linear_search_steps(arr: List[int], target: int) -> List[dict]:
+    """Generate step information for a linear search on an array.
+
+    Each step records the current index being checked and whether the
+    target has been found.  A final message is added if the search
+    completes without finding the target.
+
+    Args:
+        arr: The list of integers to search through.
+        target: The integer value to find.
+
+    Returns:
+        A list of dictionaries similar to those produced by
+        ``bubble_sort_steps``.  The ``swapped`` field is reused to
+        indicate when the target is found (True means found).
+    """
+    steps: List[dict] = []
+    # Initial state description
+    steps.append({
+        "arr": arr.copy(),
+        "highlight": None,
+        "swapped": False,
+        "pass_no": 0,
+        "desc": f"Start linear search for {target} in the array."
+    })
+    found = False
+    for idx, val in enumerate(arr):
+        if val == target:
+            found = True
+            desc = f"Checking index {idx}: {val} == {target}, target found."
+            steps.append({
+                "arr": arr.copy(),
+                "highlight": (idx, idx),
+                "swapped": True,
+                "pass_no": 1,
+                "desc": desc
+            })
+            break
+        else:
+            desc = f"Checking index {idx}: {val} != {target}, continue searching."
+            steps.append({
+                "arr": arr.copy(),
+                "highlight": (idx, idx),
+                "swapped": False,
+                "pass_no": 1,
+                "desc": desc
+            })
+    if not found:
+        steps.append({
+            "arr": arr.copy(),
+            "highlight": None,
+            "swapped": False,
+            "pass_no": 1,
+            "desc": f"Target {target} not found in the array."
+        })
     return steps
 
 
@@ -146,7 +214,9 @@ def plot_array(arr: List[int], highlight: Tuple[int, int] | None = None, swapped
         else:
             colors.append("#4fa3d1")
     ax.bar(range(len(arr)), arr, color=colors)
-    ax.set_title("Bubble Sort Visualization", fontsize=14)
+    # Use a generic title because the same plotting function is reused for search
+    # and sorting algorithms.
+    ax.set_title("Algorithm Visualization", fontsize=14)
     ax.set_xlabel("Index")
     ax.set_ylabel("Value")
     ax.set_xticks([])
@@ -178,42 +248,93 @@ def parse_numbers(text: str) -> List[int]:
     return [int(part) for part in parts]
 
 
-def run_sort(numbers: str) -> Tuple[Any, Image.Image, str, str, str, List[dict]]:
-    """Process input, perform bubble sort and initialise interface state.
+def run_sort(algorithm: str, numbers: str, case_type: str, target: str) -> Tuple[Any, Image.Image, str, str, str, List[dict]]:
+    """Determine which algorithm to run and initialise the first state.
 
-    When the user clicks the **Run Bubble Sort** button, this callback
-    validates the input list, runs the sorting algorithm while capturing
-    detailed step data, and prepares the slider, image, description and
-    status for the first step.  If parsing fails, it returns an error
-    status and hides the slider.
+    This callback parses the user input, selects the appropriate
+    algorithm (bubble sort or linear search), prepares the input list
+    based on the chosen case (e.g. reversed order for worst‑case),
+    computes the sequence of steps, and returns the initial UI values.
 
     Args:
+        algorithm: Name of the chosen algorithm ("Bubble Sort" or "Linear Search").
         numbers: A comma‑separated sequence of integers supplied by the user.
+        case_type: Which scenario to illustrate (e.g. "Custom Input" or "Worst-case (reversed)").
+        target: The target value for search algorithms; ignored for sorting.
 
     Returns:
-        A tuple containing:
-        - A slider update object to configure the visibility and range of
-          the step slider.
-        - A PIL Image representing the bar chart for the initial array.
-        - A descriptive string explaining the first step.
-        - A status string summarising the run (e.g. number of steps or an error).
-        - The list of step dictionaries to store as state for subsequent updates.
+        A tuple of (slider update, image, description, array string, status, steps).
     """
+    # Attempt to parse the list of numbers
     try:
         values = parse_numbers(numbers)
     except Exception as exc:
-        # Return an error message when parsing fails; disable the slider
         return (
             gr.update(interactive=False),
             plot_array([], None, False),
             "",
+            "",
             f"Error: {exc}",
             [],
         )
-    # Generate the detailed bubble sort trace
-    steps = bubble_sort_steps(values.copy())
-    # Configure the slider: it is visible and spans all steps
-    # Configure the slider: set its range and make it interactive if there are multiple steps
+    # Default to bubble sort if algorithm is empty
+    algorithm = algorithm or "Bubble Sort"
+    case_type = case_type or "Custom Input"
+    arr: List[int] = values.copy()
+    # Select the appropriate algorithm and prepare steps
+    if algorithm == "Bubble Sort":
+        # Adjust the array based on the chosen case.  These options allow the
+        # learner to see best‑case (already sorted), worst‑case (reversed),
+        # randomised input or a stability demonstration with duplicates.
+        lower_case = case_type.lower()
+        if "best" in lower_case:
+            arr = sorted(arr)
+        elif "worst" in lower_case:
+            arr = sorted(arr, reverse=True)
+        elif "random" in lower_case:
+            # Generate a random list of the same length (or 5 elements if none provided)
+            size = len(arr) if arr else 5
+            # Use a fixed range for randomness; duplicates may occur
+            arr = [random.randint(1, 99) for _ in range(size)]
+        elif "stability" in lower_case:
+            # Predefined list with duplicates to highlight stable sorting
+            arr = [3, 1, 3, 2, 3]
+        # Compute steps using bubble sort
+        steps = bubble_sort_steps(arr.copy())
+    elif algorithm == "Linear Search":
+        # Parse the target
+        target_val: int
+        try:
+            target_val = int(target.strip()) if target.strip() != "" else None  # type: ignore
+        except Exception:
+            return (
+                gr.update(interactive=False),
+                plot_array([], None, False),
+                "",
+                "",
+                "Error: Invalid target value.",
+                [],
+            )
+        if target_val is None:
+            return (
+                gr.update(interactive=False),
+                plot_array([], None, False),
+                "",
+                "",
+                "Error: Please enter a target value for search.",
+                [],
+            )
+        steps = linear_search_steps(arr.copy(), target_val)
+    else:
+        return (
+            gr.update(interactive=False),
+            plot_array([], None, False),
+            "",
+            "",
+            f"Error: Unknown algorithm {algorithm}",
+            [],
+        )
+    # Configure slider update
     slider_update = gr.update(
         minimum=0,
         maximum=len(steps) - 1,
@@ -221,12 +342,11 @@ def run_sort(numbers: str) -> Tuple[Any, Image.Image, str, str, str, List[dict]]
         step=1,
         interactive=(len(steps) > 1),
     )
-    # Extract the first step to initialise the outputs
+    # Get the first step for initial display
     first = steps[0]
     img = plot_array(first["arr"], highlight=first["highlight"], swapped=first["swapped"])
     description = first["desc"]
-    status = f"Total steps: {len(steps)}" if len(steps) > 1 else "Array is already sorted."
-    # Represent the array as a string for display (e.g. "3, 5, 8, 4").
+    status = f"Total steps: {len(steps)}" if len(steps) > 1 else "Done."
     array_str = ", ".join(str(x) for x in first["arr"]) if first["arr"] else "(empty)"
     return slider_update, img, description, array_str, status, steps
 
@@ -260,11 +380,18 @@ def update_plot(step: int, steps: List[dict]) -> Tuple[Image.Image, str, str, st
         status = f"Step {idx} of {len(steps) - 1}"
     else:
         status = ""
-    # If we are on the final step and it represents completion, adjust the message
+    # If we are on the final step and it represents completion, adjust the message.
+    # For search algorithms the completion message indicates whether the target
+    # was found or not.  For sorting algorithms we refer to the number of passes.
     if idx == len(steps) - 1:
-        pass_no = current.get("pass_no", 0)
-        # Provide a more descriptive completion message
-        status = f"Completed: array sorted after {pass_no} pass{'es' if pass_no != 1 else ''}."
+        desc_lower = description.lower()
+        if "target" in desc_lower and "found" in desc_lower:
+            status = "Completed: target found."
+        elif "not found" in desc_lower:
+            status = "Completed: target not found."
+        else:
+            pass_no = current.get("pass_no", 0)
+            status = f"Completed: array sorted after {pass_no} pass{'es' if pass_no != 1 else ''}."
     # Represent the array as a comma‑separated string for display
     array_str = ", ".join(str(x) for x in current["arr"]) if current["arr"] else "(empty)"
     return img, description, array_str, status
@@ -306,33 +433,96 @@ def prev_step(current_step: int, steps: List[dict]) -> Tuple[Any, Image.Image, s
     slider_update = gr.update(value=new_idx, interactive=(len(steps) > 1))
     return slider_update, img, desc, arr_str, status
 
+# Callback to show or hide the target input based on algorithm choice
+def toggle_target_visibility(algorithm: str) -> Any:
+    """
+    Return a Gradio update specifying whether the target input should be visible.
+
+    The target field is only relevant when performing a search (e.g. linear search).
+    When the user selects a sorting algorithm, the target field can be hidden to
+    simplify the interface.
+
+    Args:
+        algorithm: The name of the algorithm selected by the user.
+
+    Returns:
+        A Gradio update object setting the ``visible`` property of the target input.
+    """
+    return gr.update(visible=(algorithm == "Linear Search"))
+
 
 def build_demo() -> gr.Blocks:
     """Create and return the Gradio interface for the bubble sort visualizer."""
-    with gr.Blocks(title="Bubble Sort Visualizer") as demo:
+    with gr.Blocks(title="Sorting & Searching Visualizer") as demo:
+        # Introductory Markdown explaining the OOP concepts and usage.  Emojis and
+        # bullet points make the text engaging and help learners see at a glance what
+        # the app demonstrates.  This header also clarifies that multiple algorithms
+        # and scenarios are available.
         gr.Markdown(
             """
-            # Bubble Sort Visualizer
+            🎓 **CISC 121 – OOP Sorting & Searching Visualizer**
 
-            Enter a list of integers separated by commas and click **Run Bubble Sort**
-            to see how the bubble sort algorithm gradually orders the numbers.
-            Use the step slider to move through each comparison and swap.
+            Learn object‑oriented programming concepts through algorithm visualisation!
+
+            **This app demonstrates key OOP concepts:**
+            * 📦 **Classes & Objects:** Although this demo uses functions, the underlying
+              algorithms can be thought of as objects with state and behaviour.
+            * 🎭 **Inheritance:** All sorting algorithms share common behaviours like
+              stepping through a list and producing a trace of actions.
+            * 🔄 **Polymorphism:** Swap between sorting and searching algorithms
+              seamlessly using the drop‑down below.
+            * 🏭 **Factory Pattern:** The code selects the appropriate algorithm
+              implementation based on your choice of algorithm and case.
+
+            **How to use:**
+            1. Choose an algorithm (e.g. Bubble Sort or Linear Search) and a case type.
+            2. Enter a comma‑separated list of numbers.  For search, also provide
+               the target value.
+            3. Click **Run Algorithm** to generate the step‑by‑step visualisation.
+            4. Use the slider or **Previous**/**Next** buttons to navigate through
+               each comparison, swap or check.  Explanations and the current array
+               update automatically.
             """
         )
+        # Top row for algorithm selection and case type.  The algorithm determines
+        # whether a target field is needed.  The case type controls how the input
+        # array is prepared (custom, best‑case, worst‑case, random or stability demo).
+        with gr.Row():
+            algorithm_dropdown = gr.Dropdown(
+                choices=["Bubble Sort", "Linear Search"],
+                value="Bubble Sort",
+                label="Algorithm",
+            )
+            case_selector = gr.Dropdown(
+                choices=[
+                    "Custom Input",
+                    "Best-case (sorted)",
+                    "Worst-case (reversed)",
+                    "Random",
+                    "Stability Demo",
+                ],
+                value="Custom Input",
+                label="Case",
+            )
+            target_input = gr.Textbox(
+                label="Search Target",
+                placeholder="Enter value to find (for search)",
+                lines=1,
+                visible=False,
+            )
+        # Row for entering the input list and running the algorithm.  The text box
+        # accepts comma‑separated integers and the button triggers the run_sort
+        # callback with the algorithm, numbers, case and target.
         with gr.Row():
             input_text = gr.Textbox(
                 label="Input Numbers",
                 placeholder="e.g., 5, 3, 8, 4, 2, 7, 1",
                 lines=1,
             )
-            # For older versions of gradio, the button text should be passed as a
-            # positional argument and the 'label' or 'variant' parameters are not
-            # supported.  See https://github.com/gradio-app/gradio/issues/ for
-            # details.
-            run_button = gr.Button("Run Bubble Sort")
-        # Slider starts hidden until after the sort runs
-        # Slider to navigate through steps; initially disabled until the sort runs. We
-        # keep it visible at all times so learners know a slider will appear.
+            run_button = gr.Button("Run Algorithm")
+        # Slider to navigate through steps.  It is always visible but disabled until
+        # steps are generated.  Once an algorithm runs, the slider becomes
+        # interactive and shows the range of available steps.
         step_slider = gr.Slider(
             minimum=0,
             maximum=0,
@@ -369,10 +559,12 @@ def build_demo() -> gr.Blocks:
             outputs=[step_slider, chart_output, desc_output, array_output, status_label],
         )
 
-        # When the user runs the sort: update the slider, chart, explanation, array, status and store state
+        # When the user runs the algorithm: pass the selected algorithm, numbers,
+        # case and target.  The callback returns the configured slider, image,
+        # description, array string, status and step list.
         run_button.click(
             run_sort,
-            inputs=[input_text],
+            inputs=[algorithm_dropdown, input_text, case_selector, target_input],
             outputs=[step_slider, chart_output, desc_output, array_output, status_label, state],
         )
         # When the slider value changes: update the chart, explanation, array and status
@@ -380,6 +572,14 @@ def build_demo() -> gr.Blocks:
             update_plot,
             inputs=[step_slider, state],
             outputs=[chart_output, desc_output, array_output, status_label],
+        )
+
+        # Show or hide the target input when the algorithm changes.  When
+        # ``Linear Search`` is selected the target field appears; otherwise it is hidden.
+        algorithm_dropdown.change(
+            toggle_target_visibility,
+            inputs=[algorithm_dropdown],
+            outputs=[target_input],
         )
     return demo
 
