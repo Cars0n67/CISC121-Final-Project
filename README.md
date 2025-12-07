@@ -121,13 +121,11 @@ To satisfy Step 5 of the project guidelines (“Test and Verify”), the follow
 | Random          | Random         | Random list sorts        | ✔️ Correct |
 
 ---
+## Link to testing screenshots: 
+https://docs.google.com/document/d/14nFZsjpls0wgAIwkGB0zxC0NOcyy7EKOpCHPoZZtkvk/edit?usp=sharing
 
-## Hugging Face Deployment
-
-1. Create a new **Gradio Space**
-2. Upload all project files
-3. Set `app.py` as the entry point
-4. Hugging Face will automatically run and host your app
+## Hugging Face link:
+https://huggingface.co/spaces/Cars0n67/Bubblesortvisualizer
 
 ---
 
